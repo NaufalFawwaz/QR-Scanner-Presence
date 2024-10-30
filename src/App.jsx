@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import QrReader from 'react-qr-barcode-scanner';
 import * as XLSX from 'xlsx';
 
@@ -7,28 +7,49 @@ const QrScanner = () => {
   const [isScanning, setIsScanning] = useState(false);
   const [alert, setAlert] = useState({ visible: false, message: "", type: "" });
 
-  const handleScan = (result) => {
-    if (result) {
-      const isDuplicate = data.some((item) => item.nama === result);
-      if (isDuplicate) {
-        showAlert("QR code ini sudah pernah dipindai.", "error");
-      } else {
-        const formattedTimestamp = new Date().toLocaleString("id-ID", {
-          day: "2-digit",
-          month: "2-digit",
-          year: "numeric",
-          hour: "2-digit",
-          minute: "2-digit",
-          second: "2-digit",
-        });
-        const newData = { nama: result, kehadiran: formattedTimestamp };
-        setData((prevData) => [...prevData, newData]);
-        showAlert("QR code berhasil dipindai dan disimpan!", "success");
-      }
-      setIsScanning(false);
+  useEffect(() => {
+    const savedData = localStorage.getItem('scannedData');
+    if (savedData) {
+      setData(JSON.parse(savedData));
     }
+  }, []);
+
+  const debounce = (func, delay) => {
+    let debounceTimer;
+    return function(...args) {
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => func.apply(this, args), delay);
+    };
   };
-  
+
+  const handleScan = useCallback(
+    debounce((result) => {
+      if (result) {
+        const isDuplicate = data.some((item) => item.nama === result);
+        if (isDuplicate) {
+          showAlert("QR code ini sudah pernah dipindai.", "error");
+        } else {
+          const formattedTimestamp = new Date().toLocaleString("id-ID", {
+            day: "2-digit",
+            month: "2-digit",
+            year: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+            second: "2-digit",
+          });
+          const newData = { nama: result, kehadiran: formattedTimestamp };
+          const updatedData = [...data, newData];
+          setData(updatedData);
+
+          localStorage.setItem('scannedData', JSON.stringify(updatedData));
+
+          showAlert("QR code berhasil dipindai dan disimpan!", "success");
+        }
+        setIsScanning(false);
+      }
+    }, 0),
+    [data]
+  );
 
   const showAlert = (message, type) => {
     setAlert({ visible: true, message, type });
@@ -39,6 +60,12 @@ const QrScanner = () => {
 
   const startScan = () => setIsScanning(true);
   const stopScan = () => setIsScanning(false);
+
+  const clearData = () => {
+    localStorage.removeItem('scannedData');
+    setData([]);
+    showAlert("Data berhasil dihapus.", "success");
+  };
 
   const exportToExcel = () => {
     if (data.length === 0) return alert("Tidak ada data untuk diekspor.");
@@ -71,6 +98,9 @@ const QrScanner = () => {
           </button>
           <button onClick={exportToExcel} disabled={data.length === 0} className="px-4 py-2 rounded-md text-white font-semibold bg-green-500 hover:bg-green-600">
             Export to Excel
+          </button>
+          <button onClick={clearData} disabled={data.length === 0} className="px-4 py-2 mt-2 rounded-md text-white font-semibold bg-gray-500 hover:bg-gray-600">
+            Clear Data
           </button>
         </div>
 
